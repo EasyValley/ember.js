@@ -753,15 +753,10 @@ moduleFor('Helpers test: element action', class extends RenderingTest {
     this.assert.notDeepEqual(previousAttributes, newAttributes, 'the action id is regenerated when the action is torn down');
   }
 
-  ['@htmlbars it should unregister event handlers on rerender']() {
+  ['@test it should unregister event handlers when an element action is removed']() {
     let component;
 
     let ExampleComponent = Component.extend({
-      init() {
-        this._super(...arguments);
-        component = this;
-      },
-      active: true,
       actions: {
         edit() { }
       }
@@ -769,56 +764,36 @@ moduleFor('Helpers test: element action', class extends RenderingTest {
 
     this.registerComponent('example-component', {
       ComponentClass: ExampleComponent,
-      template: '{{#if active}}<a href="#" {{action "edit"}}>click me</a>{{/if}}'
+      template: '{{#if isActive}}<a href="#" {{action "edit"}}>click me</a>{{/if}}'
     });
 
-    this.render('{{example-component}}');
+    this.render('{{example-component isActive=isActive}}', { isActive: true });
 
-    var previousActionId = component.$('a[data-ember-action]').attr('data-ember-action');
+    equal(this.$('a[data-ember-action]').length, 1, 'The element is rendered');
 
-    this.runTask(function() {
-      set(component, 'active', false);
-    });
+    let actionId = this.$('a[data-ember-action]').attr('data-ember-action');
 
-    this.runTask(function() {
-      set(component, 'active', true);
-    });
+    ok(ActionManager.registeredActions[actionId], 'An action is registered');
 
-    ok(!ActionManager.registeredActions[previousActionId], 'On rerender, the event handler was removed');
+    this.rerender();
 
-    var newActionId = component.$('a[data-ember-action]').attr('data-ember-action');
+    equal(this.$('a[data-ember-action]').length, 1, 'The element is still present');
 
-    ok(ActionManager.registeredActions[newActionId], 'After rerender completes, a new event handler was added');
-  }
+    ok(ActionManager.registeredActions[actionId], 'The action is still registered');
 
-  ['@htmlbars it should unregister event handlers on inside virtual views']() {
-    var things = emberA([
-      {
-        name: 'Thingy'
-      }
-    ]);
+    this.runTask(() => set(component, 'isActive', false));
 
-    let ExampleComponent = Component.extend({
-      actions: {
-        edit() { }
-      },
-      things: things
-    });
+    strictEqual(this.$('a[data-ember-action]').length, 0, 'The element is removed');
 
-    this.registerComponent('example-component', {
-      ComponentClass: ExampleComponent,
-      template: '{{#each things as |thing|}}<a href="#" {{action "edit"}}>click me</a>{{/each}}'
-    });
+    ok(!ActionManager.registeredActions[actionId], 'The action is unregistered');
 
-    this.render('{{example-component}}');
+    this.runTask(() => set(component, 'isActive', true));
 
-    var actionId = this.$('a[data-ember-action]').attr('data-ember-action');
+    equal(this.$('a[data-ember-action]').length, 1, 'The element is rendered');
 
-    this.runTask(() => {
-      removeAt(things, 0);
-    });
+    actionId = this.$('a[data-ember-action]').attr('data-ember-action');
 
-    ok(!ActionManager.registeredActions[actionId], 'After the virtual view was destroyed, the action was unregistered');
+    ok(ActionManager.registeredActions[actionId], 'A new action is registered');
   }
 
   ['@test it should capture events from child elements and allow them to trigger the action']() {
